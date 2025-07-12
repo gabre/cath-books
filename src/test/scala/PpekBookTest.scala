@@ -1,33 +1,52 @@
 import org.mockito.IdiomaticMockito
-import org.mockito.Mockito._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import PpekBook.toBookPage
+import cats.syntax.all._
 import net.ruippeixotog.scalascraper.model.Element
 
 class PpekBookSpec extends AnyFlatSpec with Matchers with IdiomaticMockito {
+
+  "PpekBook" should "parse author, series title and title correctly" in {
+    val link = mockElement(
+      "Prohászka gyermekkora; Prohászka a szívekben; Barlay Ö. Szabolcs",
+    )
+    val result = PpekBook.parseAuthorAndTitle(link)
+    result shouldBe
+      Right(
+        TitleParserResult(
+          "Prohászka gyermekkora",
+          "Barlay Ö. Szabolcs",
+          "Prohászka a szívekben".some,
+        ),
+      )
+  }
 
   "PpekBook" should "parse author and title correctly" in {
     val link = mockElement(
       "1940. november 24-re elrendelt engesztelés imádságai; XII. Pius pápa",
     )
     val result = PpekBook.parseAuthorAndTitle(link)
-    result shouldBe Right(
-      ("XII. Pius pápa", "1940. november 24-re elrendelt engesztelés imádságai"),
-    )
+    result shouldBe
+      Right(
+        TitleParserResult(
+          "1940. november 24-re elrendelt engesztelés imádságai",
+          "XII. Pius pápa",
+        ),
+      )
   }
 
-  it should "return an error if the link text has multiple semicolons" in {
-    val link = mockElement("a;b;c")
+  it should "return an error if the link text has more than two semicolons" in {
+    val link = mockElement("a;b;c;d")
     val result = PpekBook.parseAuthorAndTitle(link)
     result shouldBe a[Left[_, _]]
   }
 
-  it should "return an error if the link text has no semicolon" in {
+  it should "return not an error if the link text has no semicolon" in {
     val link = mockElement("no semicolon")
     val result = PpekBook.parseAuthorAndTitle(link)
-    result shouldBe a[Left[_, _]]
+    result shouldBe Right(TitleParserResult("no semicolon"))
   }
 
   it should "return an error if the link text is empty" in {
@@ -51,7 +70,7 @@ class PpekBookSpec extends AnyFlatSpec with Matchers with IdiomaticMockito {
   def mockElement(
       text: String,
       attrs: Map[String, String] = Map("href" -> "some-href"),
-  ) = {
+    ) = {
     val element = mock[Element]
     element.text.returns(text)
     element.attrs.returns(attrs)
