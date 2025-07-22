@@ -6,22 +6,23 @@ import net.ruippeixotog.scalascraper.browser.JsoupBrowser
 import net.ruippeixotog.scalascraper.dsl.DSL.Extract._
 import net.ruippeixotog.scalascraper.dsl.DSL._
 import net.ruippeixotog.scalascraper.model.Element
+import net.ruippeixotog.scalascraper.model.ElementNode
 import net.ruippeixotog.scalascraper.model.TextNode
 
 object PpekBook {
   def parseAuthorAndTitle(
       link: Element,
-    ): Either[CathBooksScraperError, TitleParserResult] =
+    ): Either[CathBooksScraperError, BookIdentifier] =
     link.text.split(";").toList match {
       case title :: series :: author :: Nil
           if author.trim.nonEmpty && title.trim.nonEmpty &&
             series.trim.nonEmpty =>
-        Right(TitleParserResult(title.trim, author.trim, series.trim.some))
+        Right(BookIdentifier(title.trim, author.trim, series.trim.some))
       case title :: author :: Nil
           if author.trim.nonEmpty && title.trim.nonEmpty =>
-        Right(TitleParserResult(title.trim, author.trim))
+        Right(BookIdentifier(title.trim, author.trim))
       case title :: Nil if title.trim.nonEmpty =>
-        Right(TitleParserResult(title.trim))
+        Right(BookIdentifier(title.trim))
       case _ =>
         Left(LinkParseError(link))
     }
@@ -31,12 +32,8 @@ object PpekBook {
     ): Either[CathBooksScraperError, PpekBookPage] =
     for {
       href <- link.attrs.get("href").toRight(MissingAttribute(link, "href"))
-      parsed <- parseAuthorAndTitle(link)
-    } yield new PpekBookPage(
-      parsed.author,
-      parsed.title,
-      s"${Conf.ppekUrl}/$href",
-    )
+      id <- parseAuthorAndTitle(link)
+    } yield new PpekBookPage(id, s"${Conf.ppekUrl}/$href")
 
   def toBook(
       bookPage: PpekBookPage,
@@ -49,17 +46,39 @@ object PpekBook {
       tableRows <- Either.right(body >> elementList("tr"))
       fileUrls <- getBookLinks(tableRows)
       description <- getDescription(body)
-    } yield new PpekBook(bookPage.author, bookPage.title, description, fileUrls)
+    } yield new PpekBook(bookPage.id, description, fileUrls)
 
   def getDescription(
       body: Element,
-    ): Either[CathBooksScraperError, String] =
-    body
-      .childNodes
-      .collectFirst { case t: TextNode =>
-        t.content
-      }
-      .toRight(ElementNotFound("Book description"))
+    ): Either[CathBooksScraperError, String] = {
+    val nodes = body.childNodes.toSeq
+    val firstHrNodeIndex = nodes.indexWhere {
+      case ElementNode(JsoupBrowser.JsoupElement(e)) if e.tagName == "hr" =>
+        true
+      case _ =>
+        false
+    }
+    val downloadSmallTextIndex = nodes.indexWhere {
+      case ElementNode(JsoupBrowser.JsoupElement(e))
+          if e.text.startsWith("Kattintson") =>
+        true
+      case _ =>
+        false
+    }
+    if (firstHrNodeIndex == -1 || downloadSmallTextIndex == -1)
+      Left(ElementNotFound("Book description"))
+    else
+      nodes
+        .slice(firstHrNodeIndex + 1, downloadSmallTextIndex)
+        .collect {
+          case t: TextNode if t.content.trim.nonEmpty =>
+            t.content.trim
+          case ElementNode(e) =>
+            e.outerHtml
+        }
+        .mkString
+        .asRight
+  }
 
   def getBookLinks(
       tableRows: List[Element],
@@ -86,18 +105,16 @@ object PpekBook {
     }.value.sequence
 }
 
-case class TitleParserResult(
+case class BookIdentifier(
     title: String,
     author: String = "Unknown author",
     series: Option[String] = None)
 
 case class PpekBookPage(
-    author: String,
-    title: String,
+    id: BookIdentifier,
     url: String)
 
 case class PpekBook(
-    author: String,
-    title: String,
+    id: BookIdentifier,
     description: String,
     fileUrls: List[String])

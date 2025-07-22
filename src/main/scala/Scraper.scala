@@ -12,12 +12,13 @@ object Scraper {
       case Left(error) =>
         println(s"Error: $error")
       case Right(value) =>
-        println(s"Success: $value")
+        println(s"Success: ${value.mkString("\n")}")
     }
 
   def process(): Either[CathBooksScraperError, List[PpekBook]] =
     for {
       books <- getPpekBooks()
-      ppekBooks <- books.map(toBook).sequence
+      limitedBooks = books.take(10)
+      ppekBooks <- limitedBooks.map(toBook).sequence
     } yield ppekBooks
 }

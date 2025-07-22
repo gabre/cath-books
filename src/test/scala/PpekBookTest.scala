@@ -15,7 +15,7 @@ class PpekBookSpec extends AnyFlatSpec with Matchers with IdiomaticMockito {
     val result = PpekBook.parseAuthorAndTitle(link)
     result shouldBe
       Right(
-        TitleParserResult(
+        BookIdentifier(
           "Prohászka gyermekkora",
           "Barlay Ö. Szabolcs",
           "Prohászka a szívekben".some,
@@ -30,7 +30,7 @@ class PpekBookSpec extends AnyFlatSpec with Matchers with IdiomaticMockito {
     val result = PpekBook.parseAuthorAndTitle(link)
     result shouldBe
       Right(
-        TitleParserResult(
+        BookIdentifier(
           "1940. november 24-re elrendelt engesztelés imádságai",
           "XII. Pius pápa",
         ),
@@ -46,7 +46,7 @@ class PpekBookSpec extends AnyFlatSpec with Matchers with IdiomaticMockito {
   it should "return not an error if the link text has no semicolon" in {
     val link = mockElement("no semicolon")
     val result = PpekBook.parseAuthorAndTitle(link)
-    result shouldBe Right(TitleParserResult("no semicolon"))
+    result shouldBe Right(BookIdentifier("no semicolon"))
   }
 
   it should "return an error if the link text is empty" in {
@@ -58,7 +58,10 @@ class PpekBookSpec extends AnyFlatSpec with Matchers with IdiomaticMockito {
   it should "create a new PpekBookPage instance correctly" in {
     val link = mockElement("title; author", Map("href" -> "asdf"))
     val result = toBookPage(link)
-    result shouldBe Right(PpekBookPage("author", "title", "http://ppek.hu/asdf"))
+    result shouldBe
+      Right(
+        PpekBookPage(BookIdentifier("title", "author"), "http://ppek.hu/asdf"),
+      )
   }
 
   it should "return an error if the link does not have an href attribute" in {
